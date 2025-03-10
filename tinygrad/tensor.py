@@ -1238,6 +1238,11 @@ class Tensor(SimpleMathTrait):
       v = v.cast(res.dtype)._broadcast_to(_broadcast_shape(res.shape, v.shape)).contiguous()
       res.assign(v).realize()
 
+  def masked_select(self, mask:Tensor) -> Tensor:
+    if mask.dtype is not dtypes.bool: raise TypeError(f"mask must be boolean tensor, {mask.dtype=}")
+    m = mask._broadcast_to(self.shape).flatten()
+    return (self.flatten() * ((Tensor.arange(m.sum().item(), device=self.device, requires_grad=False).unsqueeze(1) == (m.cumsum()-1)) & m)).sum(1)
+
   def gather(self:Tensor, dim:int, index:Tensor) -> Tensor:
     """
     Gathers values along an axis specified by `dim`.
