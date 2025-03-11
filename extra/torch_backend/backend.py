@@ -63,21 +63,32 @@ def inplace_fn(outvars: str|list[str]):
 @torch.library.impl("aten::masked_select", "privateuseone")
 def masked_select(self, mask):
   # err, bad
-  return wrap(Tensor(self.cpu().numpy()[mask.cpu().numpy()]))
+  return wrap(unwrap(self).masked_select(unwrap(mask)))
+  # return wrap(Tensor(self.cpu().numpy()[mask.cpu().numpy()]))
+
+@torch.library.impl("aten::index_put_", "privateuseone")
+@inplace_fn("self")
+def index_put_(self, indices, values, accumulate=False):
+  (ret:=unwrap(self)).index_put_([unwrap(x) if isinstance(x, torch.Tensor) else x for x in indices], unwrap(values), accumulate)
+  return wrap(ret)
 
 @torch.library.impl("aten::_index_put_impl_", "privateuseone")
 @inplace_fn("self")
 def _index_put_impl_(self, indices, values, accumulate=False, unsafe=False):
-  # TODO: move to tinygrad
-  ret = aten._index_put_impl_(self.cpu(), [x.cpu() if isinstance(x, torch.Tensor) else None for x in indices], values.cpu(), accumulate, unsafe).tiny()
-  return wrap(unwrap(self).assign(unwrap(ret)))
+  (ret:=unwrap(self)).index_put_([unwrap(x) if isinstance(x, torch.Tensor) else x for x in indices], unwrap(values), accumulate)
+  return wrap(ret)
+  # # TODO: move to tinygrad
+  # ret = aten._index_put_impl_(self.cpu(), [x.cpu() if isinstance(x, torch.Tensor) else None for x in indices], values.cpu(), accumulate, unsafe).tiny()
+  # return wrap(unwrap(self).assign(unwrap(ret)))
 
 @torch.library.impl("aten::index.Tensor", "privateuseone")
 def index_tensor(x, y):
-  return aten.index(x.cpu(), [z.cpu() if isinstance(z, torch.Tensor) else None for z in y]).tiny()
+  return wrap(unwrap(x)._getitem([unwrap(x) if isinstance(x, torch.Tensor) else x for x in y]))
+  # return aten.index(x.cpu(), [z.cpu() if isinstance(z, torch.Tensor) else None for z in y]).tiny()
 
 @torch.library.impl("aten::randperm.generator_out", "privateuseone")
-def randperm_generator(n, generator=None, out=None): out.copy_(torch.randperm(n, generator=generator, device="cpu").tiny())
+def randperm_generator(n, generator=None, out=None):
+  out.copy_(torch.randperm(n, generator=generator, device="cpu").tiny())
 
 # *** end bad functions on CPU ***
 

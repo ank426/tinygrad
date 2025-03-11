@@ -1110,6 +1110,9 @@ class Tensor(SimpleMathTrait):
       match index:
         case list() | tuple() | Tensor():
           if not isinstance(index, Tensor): index = Tensor(index, self.device, requires_grad=False)
+          if dtypes.is_bool(index.dtype):
+            if index.shape != (size,): raise IndexError(f"{index=} is not of length {size=}")
+            index = Tensor.arange(size, device=self.device, requires_grad=False).masked_select(index)
           if not dtypes.is_int(index.dtype): raise IndexError(f"index dtype {index.dtype} is not supported")
           index = (index.to(self.device) < 0).where(index+size, index)  # treat negative index values
         case int() | UOp(): # sint
@@ -1239,9 +1242,12 @@ class Tensor(SimpleMathTrait):
       res.assign(v).realize()
 
   def masked_select(self, mask:Tensor) -> Tensor:
-    if mask.dtype is not dtypes.bool: raise TypeError(f"mask must be boolean tensor, {mask.dtype=}")
+    if not dtypes.is_bool(mask.dtype): raise TypeError(f"mask must be boolean tensor, {mask.dtype=}")
     m = mask._broadcast_to(self.shape).flatten()
     return (self.flatten() * ((Tensor.arange(m.sum().item(), device=self.device, requires_grad=False).unsqueeze(1) == (m.cumsum()-1)) & m)).sum(1)
+
+  def index_put_(self, indices, values:Tensor|ConstType, accumulate=False) -> None:
+    self.__setitem__(indices, self._getitem(indices) + values if accumulate else values)
 
   def gather(self:Tensor, dim:int, index:Tensor) -> Tensor:
     """
